@@ -8,6 +8,9 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./students/dennis
 
     steps:
     - uses: actions/checkout@v4
