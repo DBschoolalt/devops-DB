@@ -2,7 +2,7 @@ FROM node:24
 
 WORKDIR /usr/src/app
 
-COPY ./students/dennis/src/package*.json ./
+COPY package*.json ./
 RUN npm install
 
 COPY . .
