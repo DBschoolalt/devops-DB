@@ -1,0 +1,67 @@
+name: DevOps Practice
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./students/dennis
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24.x
+        cache: 'npm'
+        cache-dependency-path: './students/dennis/src/package-lock.json'
+      
+    - name: Initialize Node CI
+      run: npm ci
+      working-directory: ./students/dennis/src
+
+    - name: Run the app
+      working-directory: ./students/dennis/src
+      run: npm run build
+
+    - name: Generate Docker Tag
+      id: tag
+      run: |
+        echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+     
+    - name: Build Docker Image
+      run: docker build -t ${{ secrets.DOCKER_USERNAME }}/devops-practice:$IMAGE_TAG .
+      
+    - name: Publish Docker Image
+      run: |
+        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_TOKEN }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/devops-practice:$(git rev-parse --short HEAD)
+
+    - name: Decode SSH key
+      run: |
+        echo "${{ secrets.EC2_SSH_KEY_B64 }}" | base64 -d > ec2-key.pem
+        chmod 600 ec2-key.pem
+
+    - name: Copy files to EC2
+      run: |
+        rsync -avz \
+        -e "ssh -i ec2-key.pem -o StrictHostKeyChecking=no" \
+        ./ \
+        ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/devopsapp
+
+    - name: Run app on EC2
+      run: |
+        ssh -i ec2-key.pem -o StrictHostKeyChecking=no  ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+        # stop and remove previous containers
+        sudo docker ps --filter "publish=3000" --format "{{.ID}}" | xargs -r sudo docker stop
+        sudo docker rm -f devopsapp || true
+
+        # Pull and run new image
+        sudo docker pull ${{ secrets.DOCKER_USERNAME }}/devops-practice:${IMAGE_TAG}
+        sudo docker run -d --name devopsapp -p 3000:3000 ${{ secrets.DOCKER_USERNAME }}/devops-practice:${IMAGE_TAG} 
+        EOF
