@@ -20,5 +20,10 @@ jobs:
         node-version: 24.x
         cache: 'npm'
       
-    - run: npm ci
-    - run: npm run build
+    - name: Initialize Node CI
+      run: npm ci
+      working-directory: ./students/dennis/src
+      
+    - name: Run the app
+      working-directory: ./students/dennis/src
+      run: npm run build
